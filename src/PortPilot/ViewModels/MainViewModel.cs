@@ -56,7 +56,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public AppSettings Settings => data.Settings;
     public string DataDirectory => store.DataDirectory;
     public string Privilege => Core.Native.ProcessNativeApi.IsAdministrator() ? "Administrator" : "Standard";
-    public string About => $"PortPilot 1.0.2\nA lightweight Windows port & process inspector.\n\n{Environment.OSVersion}\n.NET {Environment.Version} · {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture}\n{Privilege}\n\nData: {DataDirectory}";
+    public string About => $"PortPilot 1.0.3\nA lightweight Windows port & process inspector.\n\n{Environment.OSVersion}\n.NET {Environment.Version} · {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture}\n{Privilege}\n\nData: {DataDirectory}";
     [ObservableProperty] private string page = "Dashboard";
     [ObservableProperty] private string searchText = "";
     [ObservableProperty] private SearchField selectedSearchField = SearchField.All;

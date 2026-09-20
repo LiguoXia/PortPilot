@@ -4,6 +4,11 @@ A lightweight Windows port & process inspector.
 
 面向 Windows 开发者的本机端口、PID、进程诊断工具。使用 **.NET 8 / WPF / MVVM**，通过 Windows IP Helper 与进程 API 读取实时信息，不解析 netstat 命令输出。
 
+## 1.0.3 图标修复
+
+- 修复部分 Windows 11 环境中图标显示为方框的问题：界面图标改为随 EXE 内置的矢量绘制，不再依赖 Segoe Fluent Icons / MDL2 图标字体。
+- 覆盖侧栏、窗口控制、搜索下拉、刷新、详情关闭、空状态和进程树图标；保持主题颜色与高 DPI 缩放。
+
 ## 1.0.2 问题修复
 
 - 搜索改为 **Enter 或点击“搜索”后执行**。输入、粘贴、切换字段和精确选项时不再反复筛选列表；手动/自动刷新继续使用上次提交的条件。清空后提交可恢复全部结果。

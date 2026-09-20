@@ -105,6 +105,7 @@ public partial class App : Application
             using var file = File.Create(Path.Combine(folder, name + ".png")); encoder.Save(file);
         }
         themes.Apply("light"); await Capture("dashboard-light");
+        Infrastructure.IconUiSmoke.Verify(window, themes, folder, result);
         foreach (var page in new[] {"Ports", "Processes", "Connections", "Favorites", "History", "Settings", "Search"})
         { vm.NavigateCommand.Execute(page); await Capture(page.ToLowerInvariant()); result.Add(page + ": rendered"); }
         vm.NavigateCommand.Execute("Processes"); vm.TreeMode = true; await Capture("process-tree"); vm.TreeMode = false;

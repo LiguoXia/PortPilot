@@ -3,7 +3,7 @@
     <OutputType>WinExe</OutputType>
     <UseWPF>true</UseWPF>
     <AssemblyName>PortPilot</AssemblyName>
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Resources/PortPilot.ico</ApplicationIcon>
     <PublishSingleFile>true</PublishSingleFile>
