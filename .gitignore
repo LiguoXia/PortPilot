@@ -1,0 +1,14 @@
+.tools/
+**/bin/
+**/obj/
+release/data/
+TestResults/
+*.user
+.verification/
+release/
+artifacts/
+docs/screenshots/
+docs/ui-smoke-results.txt
+docs/portable-smoke-results.txt
+**/data/
+*.log

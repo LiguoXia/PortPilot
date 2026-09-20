@@ -1,0 +1,10 @@
+{
+  "Time": "2026-09-20T11:43:41.5189191+08:00",
+  "StartupWindowMs": 2366.0,
+  "SampleSeconds": 10.03,
+  "CpuPercentNormalized": 0.54,
+  "WorkingSetMB": 280.7,
+  "PrivateMB": 220.7,
+  "LogicalProcessors": 20,
+  "Responding": true
+}

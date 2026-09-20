@@ -1,0 +1,7 @@
+<Window x:Class="PortPilot.Views.ConfirmDialog" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Width="530" Height="440" MinHeight="300" WindowStartupLocation="CenterOwner" ResizeMode="CanResize" ShowInTaskbar="False" Title="PortPilot">
+ <Grid Margin="26"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <TextBlock x:Name="Heading" FontSize="23" FontWeight="SemiBold" Margin="0,0,0,18"/>
+  <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"><TextBlock x:Name="Message" TextWrapping="Wrap" LineHeight="22"/></ScrollViewer>
+  <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0"><Button Content="取消" IsCancel="True" MinWidth="90" Margin="0,0,10,0"/><Button Content="确认继续" Click="ConfirmClick" Style="{StaticResource DangerButton}" MinWidth="100"/></StackPanel>
+ </Grid>
+</Window>
