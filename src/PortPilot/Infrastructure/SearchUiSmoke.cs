@@ -1,6 +1,10 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Collections.Specialized;
+using System.Windows.Automation.Peers;
+using System.Windows.Automation.Provider;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PortPilot.Core.Services;
@@ -16,23 +20,55 @@ internal static class SearchUiSmoke
     {
         var vm = window.ViewModel;
         vm.HasDetails = false; vm.NavigateCommand.Execute("Ports");
+        vm.SearchPortCommand.Execute(fixturePort.ToString());
+        vm.NavigateCommand.Execute("Dashboard");
+        var resets = 0;
+        NotifyCollectionChangedEventHandler changed = (_, e) => { if (e.Action == NotifyCollectionChangedAction.Reset) resets++; };
+        foreach (var view in new[] { vm.PortsView, vm.ConnectionsView, vm.ProcessesView }) view.CollectionChanged += changed;
+        try
+        {
+            window.SearchFieldPicker.SelectedValue = SearchField.ProcessName;
+            window.SearchExactToggle.IsChecked = true;
+            window.SearchBox.Text = "";
+            foreach (var character in "不存在的中文进程.exe")
+            {
+                window.SearchBox.Text += character;
+                await Task.Delay(300); // Cross the old debounce interval after every keystroke.
+            }
+            await vm.RefreshAsync();
+            if (resets != 0 || vm.Page != "Dashboard" || !vm.HasPendingSearch || !vm.CanFavoriteQuery
+                || !vm.PortsView.Cast<InspectorRow>().Any(r => r.Port == fixturePort)
+                || vm.PortsView.Cast<InspectorRow>().Any(r => r.Port != fixturePort))
+                throw new InvalidOperationException("Typing/options/refresh executed a draft query or reset the displayed results.");
+            vm.SetFilterCommand.Execute("TCP");
+            if (!vm.PortsView.Cast<InspectorRow>().Any(r => r.Port == fixturePort))
+                throw new InvalidOperationException("Changing a filter applied unsubmitted search text.");
+            vm.SetFilterCommand.Execute("All");
+            results.Add("Search draft: slow Chinese typing + field/exact changes cause zero view resets or navigation; refresh/filter preserve submitted query: PASS");
+        }
+        finally { foreach (var view in new[] { vm.PortsView, vm.ConnectionsView, vm.ProcessesView }) view.CollectionChanged -= changed; }
         window.SearchFieldPicker.SelectedValue = SearchField.Pid;
         window.SearchBox.Text = Environment.ProcessId.ToString();
+        window.SearchBox.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window), Environment.TickCount, Key.Enter) { RoutedEvent = Keyboard.KeyDownEvent });
         await WaitForAsync(() => vm.SelectedSearchField == SearchField.Pid && vm.PortsView.Cast<InspectorRow>().Any()
-            && vm.PortsView.Cast<InspectorRow>().All(r => r.Pid == Environment.ProcessId), "PID picker/input binding or field filtering failed.");
+            && vm.Page == "Search" && !vm.HasPendingSearch && vm.PortsView.Cast<InspectorRow>().All(r => r.Pid == Environment.ProcessId), "Enter submission or PID field filtering failed.");
         window.SearchFieldPicker.SelectedValue = SearchField.LocalPort;
         window.SearchBox.Text = fixturePort.ToString();
+        ClickSearch(window);
         await WaitForAsync(() => vm.PortsView.Cast<InspectorRow>().Any() && vm.PortsView.Cast<InspectorRow>().All(r => r.Port == fixturePort), "Local-port field filtering failed.");
         window.SearchFieldPicker.SelectedValue = SearchField.ProcessName;
         window.SearchBox.Text = "PortPilot";
         window.SearchExactToggle.IsChecked = true;
+        ClickSearch(window);
         await WaitForAsync(() => vm.IsExactSearch && !vm.PortsView.Cast<InspectorRow>().Any(), "Exact name matching accepted a partial name.");
         window.SearchExactToggle.IsChecked = false;
+        ClickSearch(window);
         await WaitForAsync(() => vm.PortsView.Cast<InspectorRow>().Any(), "Partial-name search no longer works.");
         window.SearchExactToggle.IsChecked = true;
         window.SearchBox.Text = "PORTPILOT.EXE";
+        ClickSearch(window);
         await WaitForAsync(() => vm.PortsView.Cast<InspectorRow>().Any(), "Exact name comparison is not case-insensitive.");
-        results.Add("Search UI: picker + exact toggle bindings, scoped PID/port, partial/exact process name: PASS");
+        results.Add("Search UI: Enter + search button, scoped PID/port, partial/exact process name: PASS");
 
         foreach (var theme in new[] { "light", "dark" })
         {
@@ -66,12 +102,17 @@ internal static class SearchUiSmoke
             }
         }
         window.Width = 1200; window.SearchBox.Text = ""; vm.SelectedSearchField = SearchField.All; vm.IsExactSearch = false;
-        await Task.Delay(350);
+        ClickSearch(window);
+        await WaitForAsync(() => !vm.HasPendingSearch && vm.PortsView.Cast<InspectorRow>().Count() == vm.Ports.Count(r => vm.Settings.ShowSystemProcesses || !r.Process.IsSystem), "Submitting empty input did not restore all results.");
+        results.Add("Clear and submit: all results restored: PASS");
     }
+
+    private static void ClickSearch(MainWindow window)
+        => ((IInvokeProvider)new ButtonAutomationPeer(window.SearchSubmitButton).GetPattern(PatternInterface.Invoke)).Invoke();
 
     private static async Task WaitForAsync(Func<bool> ready, string error)
     {
-        // Wait for dispatcher/debounce completion, not a fixed 350 ms on a busy host.
+        // Wait for UI automation and dispatcher binding updates on busy hosts.
         for (var i = 0; i < 50; i++) { await Task.Delay(100); if (ready()) return; }
         throw new InvalidOperationException(error);
     }

@@ -108,13 +108,14 @@ public partial class App : Application
         foreach (var page in new[] {"Ports", "Processes", "Connections", "Favorites", "History", "Settings", "Search"})
         { vm.NavigateCommand.Execute(page); await Capture(page.ToLowerInvariant()); result.Add(page + ": rendered"); }
         vm.NavigateCommand.Execute("Processes"); vm.TreeMode = true; await Capture("process-tree"); vm.TreeMode = false;
-        vm.NavigateCommand.Execute("Ports"); vm.SearchText = "PID:" + Environment.ProcessId; await Task.Delay(300);
+        vm.NavigateCommand.Execute("Ports"); vm.SearchText = "PID:" + Environment.ProcessId; vm.SubmitSearchCommand.Execute(null); await Task.Delay(100);
         var fixturePort = ((System.Net.IPEndPoint)fixture.LocalEndpoint).Port;
         var own = vm.Ports.First(r => r.Pid == Environment.ProcessId && r.Port == fixturePort); vm.SelectedRow = own;
         for (var i = 0; i < 100 && vm.IsDetailBusy; i++) await Task.Delay(100);
         if (!vm.DetailCommandLine.Contains("--smoke-test")) throw new InvalidOperationException("Own command line not retrieved: " + vm.DetailCommandLine);
         result.Add("Own command line: verified"); await Capture("inspector");
-        themes.Apply("dark"); await Capture("inspector-dark"); vm.HasDetails = false; vm.SearchText = ""; await Task.Delay(300); await Capture("ports-dark");
+        await Infrastructure.InspectorUiSmoke.VerifyAsync(window, result); await Capture("inspector-network"); window.InspectorTabs.SelectedIndex = 0;
+        themes.Apply("dark"); await Capture("inspector-dark"); vm.HasDetails = false; vm.SearchText = ""; vm.SubmitSearchCommand.Execute(null); vm.NavigateCommand.Execute("Ports"); await Task.Delay(100); await Capture("ports-dark");
         vm.HasDetails = false; vm.SearchText = ""; vm.NavigateCommand.Execute("Dashboard"); themes.Apply("dark"); await Capture("dashboard-dark");
         foreach (var scale in new[] {1.25, 1.5, 1.75, 2.0})
         {
@@ -126,7 +127,7 @@ public partial class App : Application
         window.Width = 900; window.Height = 600; await Capture("minimum-size-dark"); window.Width = 1200; window.Height = 760;
         await Infrastructure.SearchUiSmoke.VerifyAsync(window, themes, folder, fixturePort, result);
         vm.SelectedSearchField = SearchField.ProcessName; vm.IsExactSearch = true; vm.SearchText = "PortPilot.exe";
-        await Task.Delay(350); await Capture("search-exact-process");
+        vm.SubmitSearchCommand.Execute(null); await Task.Delay(100); await Capture("search-exact-process");
         vm.SearchText = ""; vm.SelectedSearchField = SearchField.All; vm.IsExactSearch = false;
         vm.OpenPaletteCommand.Execute(null); await Capture("command-palette");
         File.WriteAllLines(Path.Combine(folder, "results.txt"), result);

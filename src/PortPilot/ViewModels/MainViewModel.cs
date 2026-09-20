@@ -26,7 +26,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly CancellationTokenSource lifetime = new();
     private CancellationTokenSource? detailToken;
     private readonly DispatcherTimer timer;
-    private readonly DispatcherTimer searchTimer;
     private readonly Dictionary<string, InspectorRow> portIndex = [], processIndex = [];
     private ScanSnapshot snapshot = new([], [], DateTimeOffset.Now, []);
     private bool firstScan = true;
@@ -57,7 +56,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public AppSettings Settings => data.Settings;
     public string DataDirectory => store.DataDirectory;
     public string Privilege => Core.Native.ProcessNativeApi.IsAdministrator() ? "Administrator" : "Standard";
-    public string About => $"PortPilot 1.0.1\nA lightweight Windows port & process inspector.\n\n{Environment.OSVersion}\n.NET {Environment.Version} · {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture}\n{Privilege}\n\nData: {DataDirectory}";
+    public string About => $"PortPilot 1.0.2\nA lightweight Windows port & process inspector.\n\n{Environment.OSVersion}\n.NET {Environment.Version} · {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture}\n{Privilege}\n\nData: {DataDirectory}";
     [ObservableProperty] private string page = "Dashboard";
     [ObservableProperty] private string searchText = "";
     [ObservableProperty] private SearchField selectedSearchField = SearchField.All;
@@ -99,9 +98,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         "Favorites" => "关注常用端口与进程，持续观察状态变化。", "History" => "查询、收藏与进程操作的本地记录。", "Search" => "端口、PID、进程与收藏的分组搜索结果。", _ => "按照你的习惯，配置 PortPilot。"
     };
     public bool IsEmpty => VisibleCount == 0 && !IsBusy;
-    public string EmptyTitle => snapshot.Warnings.Count > 0 ? "部分数据读取失败" : CurrentSearch.LocalPort is { } port ? $"Port {port} · 当前快照无匹配记录" : "没有匹配的结果";
+    public string EmptyTitle => snapshot.Warnings.Count > 0 ? "部分数据读取失败" : activeSearch.LocalPort is { } port ? $"Port {port} · 当前快照无匹配记录" : "没有匹配的结果";
     private SearchQuery CurrentSearch => SearchQuery.Parse(SearchText, SelectedSearchField, IsExactSearch);
-    public bool CanFavoriteQuery => CurrentSearch.LocalPort != null;
+    public bool CanFavoriteQuery => activeSearch.LocalPort != null;
+    public bool HasPendingSearch => CurrentSearch != activeSearch;
+    public string SearchActionHint => HasPendingSearch ? "搜索条件已修改，按 Enter 或点击搜索后生效" : "按 Enter 或点击搜索；清空后提交可显示全部结果";
     public string SearchPlaceholder => SelectedSearchField switch
     {
         SearchField.LocalPort => "本地端口，如 8080", SearchField.RemotePort => "远程端口，如 443", SearchField.Pid => "进程 PID，如 1234",
@@ -109,7 +110,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SearchField.Path => IsExactSearch ? "完整可执行文件路径" : "程序路径或路径片段",
         SearchField.IpAddress => "IP 地址，如 127.0.0.1", _ => "搜索端口、PID、进程名称…"
     };
-    public string SearchHint => $"{SearchPlaceholder}\nCtrl + F 聚焦；Enter 查看分组结果。\n“精确”完整匹配字段，忽略大小写；端口与 PID 始终按数字精确匹配。\n全部字段模式也支持 port:8080、pid:1234、process:java.exe、path:完整路径。";
+    public string SearchHint => $"{SearchPlaceholder}\nCtrl + F 聚焦；输入后按 Enter 或点击搜索，查看分组结果。\n“精确”完整匹配字段，忽略大小写；端口与 PID 始终按数字精确匹配。\n全部字段模式也支持 port:8080、pid:1234、process:java.exe、path:完整路径。";
     public string EmptyDescription => snapshot.Warnings.Count > 0 ? "请查看状态信息并重试，无法判断端口是否空闲。" : "尝试调整搜索或筛选。未观测到端点不代表端口一定可绑定。";
     public bool CanNote => SelectedRow?.Connection != null;
     public MainViewModel(NetworkService network, ProcessService processes, ProcessKillService killer, UserDataService data, PortableStore store, DialogService dialogs, ThemeService themes, ILogger<MainViewModel> logger)
@@ -127,26 +128,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         UpdateHistory();
         timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(Settings.RefreshInterval) };
         timer.Tick += TimerTick;
-        searchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
-        searchTimer.Tick += SearchTick;
     }
     public async Task InitializeAsync() { themes.Apply(Settings.Theme); await RefreshAsync(); if (Settings.AutoRefresh) timer.Start(); }
     private async void TimerTick(object? sender, EventArgs e) => await RefreshAsync();
-    private void SearchTick(object? sender, EventArgs e) { searchTimer.Stop(); RefreshViews(); }
-    partial void OnSearchTextChanged(string value)
-    {
-        searchTimer.Stop(); searchTimer.Start();
-        if (Page == "Dashboard" && !string.IsNullOrWhiteSpace(value)) Page = "Search";
-        OnPropertyChanged(nameof(EmptyTitle)); OnPropertyChanged(nameof(EmptyDescription));
-        OnPropertyChanged(nameof(CanFavoriteQuery));
-    }
+    partial void OnSearchTextChanged(string value) => NotifySearchDraft();
+    private void NotifySearchDraft() { OnPropertyChanged(nameof(HasPendingSearch)); OnPropertyChanged(nameof(SearchActionHint)); }
     partial void OnSelectedSearchFieldChanged(SearchField value) => SearchOptionsChanged();
     partial void OnIsExactSearchChanged(bool value) => SearchOptionsChanged();
     private void SearchOptionsChanged()
     {
         OnPropertyChanged(nameof(SearchPlaceholder)); OnPropertyChanged(nameof(SearchHint));
-        OnPropertyChanged(nameof(EmptyTitle)); OnPropertyChanged(nameof(CanFavoriteQuery));
-        RefreshViews();
+        NotifySearchDraft();
     }
     partial void OnFilterChanged(string value) => RefreshViews();
     partial void OnOnlyNetworkProcessesChanged(bool value) => RefreshViews();
@@ -165,12 +157,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             "Established" => r.State == "ESTABLISHED", "Localhost" => r.LocalAddress is "127.0.0.1" or "::1", "System" => r.Process.IsSystem, "User Process" => !r.Process.IsSystem, _ => true
         };
     }
-    private void RefreshViews()
+    private void ApplySearch()
     {
         activeSearch = CurrentSearch;
-        using (PortsView.DeferRefresh()) { }
-        using (ConnectionsView.DeferRefresh()) { }
-        using (ProcessesView.DeferRefresh()) { }
+        RefreshViews();
+        OnPropertyChanged(nameof(EmptyTitle)); OnPropertyChanged(nameof(CanFavoriteQuery)); NotifySearchDraft();
+    }
+    private void RefreshViews()
+    {
+        // Refresh/filter changes keep using the submitted query while the user edits the next one.
         PortsView.Refresh(); ConnectionsView.Refresh(); ProcessesView.Refresh(); UpdateVisibleCount();
         OnPropertyChanged(nameof(SearchFavorites));
         if (TreeMode && Page == "Processes") UpdateTree();
@@ -179,8 +174,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private void UpdateVisibleCount()
     { VisibleCount = Page == "Processes" ? ProcessesView.Cast<object>().Count() : Page == "Connections" ? ConnectionsView.Cast<object>().Count() : PortsView.Cast<object>().Count(); OnPropertyChanged(nameof(IsEmpty)); }
     [RelayCommand] private void Navigate(string page) { Page = page; HasDetails = false; Filter = "All"; }
-    [RelayCommand] private void SearchPort(string port) { SelectedSearchField = SearchField.LocalPort; Filter = "All"; SearchText = port; Page = "Ports"; Record("SearchPort", port); RefreshViews(); }
-    [RelayCommand] private void SubmitSearch() { Page = "Search"; Record("Search", $"{SearchOptions.First(o => o.Field == SelectedSearchField).Label} · {(IsExactSearch ? "精确" : "包含")} · {SearchText}"); RefreshViews(); }
+    [RelayCommand] private void SearchPort(string port) { SelectedSearchField = SearchField.LocalPort; Filter = "All"; SearchText = port; Page = "Ports"; Record("SearchPort", port); ApplySearch(); }
+    [RelayCommand] private void SubmitSearch() { HasDetails = false; Page = "Search"; ApplySearch(); Record("Search", $"{SearchOptions.First(o => o.Field == SelectedSearchField).Label} · {(IsExactSearch ? "精确" : "包含")} · {SearchText}"); }
     [RelayCommand] private void SetFilter(string value) => Filter = value;
     [RelayCommand] private void CloseDetails() { HasDetails = false; detailToken?.Cancel(); }
     [RelayCommand] private void OpenPalette() { IsPaletteOpen = true; PaletteQuery = ""; }
@@ -267,5 +262,5 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RecentPids.Clear(); foreach (var h in data.History.Where(h => h.Action == "ViewPID").DistinctBy(h => h.Detail).Take(3)) RecentPids.Add(h);
         RecentPorts.Clear(); foreach (var h in data.History.Where(h => h.Action == "SearchPort").Select(h => h.Detail).Distinct().Take(8)) RecentPorts.Add(h);
     }
-    public void Dispose() { timer.Stop(); searchTimer.Stop(); lifetime.Cancel(); detailToken?.Cancel(); }
+    public void Dispose() { timer.Stop(); lifetime.Cancel(); detailToken?.Cancel(); }
 }

@@ -4,6 +4,12 @@ A lightweight Windows port & process inspector.
 
 面向 Windows 开发者的本机端口、PID、进程诊断工具。使用 **.NET 8 / WPF / MVVM**，通过 Windows IP Helper 与进程 API 读取实时信息，不解析 netstat 命令输出。
 
+## 1.0.2 问题修复
+
+- 搜索改为 **Enter 或点击“搜索”后执行**。输入、粘贴、切换字段和精确选项时不再反复筛选列表；手动/自动刷新继续使用上次提交的条件。清空后提交可恢复全部结果。
+- 修复进程详情 **Network** 页的协议、状态只读属性绑定异常，支持多端点展示和刷新。
+- 常用端口、收藏查询、“查看 PID 全部端口”仍可一键执行。
+
 ## 1.0.1 搜索优化
 
 - 修复搜索框重复内边距导致的文字底部裁切；中文、英文字母和长路径保持垂直居中，长文本随光标水平滚动。
@@ -21,7 +27,7 @@ A lightweight Windows port & process inspector.
 
 全部字段模式仍保留原有综合搜索，也支持 `port:8080`、`pid:1234`、`process:java.exe`、`path:C:\Tools\app.exe`、`remoteport:443`、`ip:127.0.0.1` 前缀。选定具体字段后输入原始值即可。完整进程名称包含 `.exe` 后缀；输入 `java` 并开启精确时不会匹配 `java.exe`。
 
-常用端口、收藏查询和“查看 PID 全部端口”会自动选择对应字段。Ctrl + F 聚焦搜索，Enter 查看分组结果。
+常用端口、收藏查询和“查看 PID 全部端口”会自动选择对应字段。Ctrl + F 聚焦搜索，输入后按 Enter 或点击“搜索”查看分组结果。
 
 ## 直接运行
 
@@ -33,7 +39,7 @@ A lightweight Windows port & process inspector.
 
 ## 界面
 
-以下截图由无历史数据的独立副本生成。含本机路径、进程列表和 IP 的完整诊断截图仅保留在本地，不发布到仓库。
+以下截图由独立测试副本生成，仅包含空白初始界面或测试操作。含本机路径、进程列表和 IP 的完整诊断截图仅保留在本地，不发布到仓库。
 
 ![浅色 Dashboard](docs/public/dashboard-light.png)
 

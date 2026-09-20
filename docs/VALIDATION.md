@@ -1,6 +1,6 @@
 # PortPilot 1.0.0 验证记录
 
-> 本文为 1.0.0 的历史验证记录。1.0.1 搜索优化与最新测试结果见 [SEARCH-1.0.1.md](SEARCH-1.0.1.md)。`TestResults/tests.trx` 和界面截图由最新构建更新。
+> 本文为 1.0.0 的历史验证记录。1.0.1 搜索优化见 [SEARCH-1.0.1.md](SEARCH-1.0.1.md)，最新修复与测试结果见 [FIXES-1.0.2.md](FIXES-1.0.2.md)。`TestResults/tests.trx` 和界面截图由最新构建更新。
 
 验证日期：2026-09-20。Windows 11 x64（系统版本 10.0.26200），.NET SDK 8.0.425。
 

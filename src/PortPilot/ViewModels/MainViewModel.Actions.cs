@@ -53,7 +53,7 @@ public sealed partial class MainViewModel
         foreach (var old in DetailConnections.Where(r => !keys.Contains(r.Key)).ToArray()) DetailConnections.Remove(old);
         var present = DetailConnections.Select(r => r.Key).ToHashSet(); foreach (var row in rows) if (!present.Contains(row.Key)) DetailConnections.Add(row);
     }
-    [RelayCommand] private void ViewPidPorts() { if (SelectedRow == null) return; var pid = SelectedRow.Pid; SelectedSearchField = SearchField.Pid; SearchText = pid.ToString(); Filter = "All"; Page = "Ports"; RefreshViews(); }
+    [RelayCommand] private void ViewPidPorts() { if (SelectedRow == null) return; var pid = SelectedRow.Pid; SelectedSearchField = SearchField.Pid; SearchText = pid.ToString(); Filter = "All"; Page = "Ports"; ApplySearch(); }
     [RelayCommand] private void Copy(string? kind)
     {
         if (SelectedRow is not { } r) return;
@@ -64,7 +64,7 @@ public sealed partial class MainViewModel
     [RelayCommand] private void SaveNote() { if (SelectedRow?.Connection == null) return; data.SetNote(SelectedRow.Port, PortNote); Status = "备注已保存"; _ = RefreshAsync(); }
     [RelayCommand] private void FavoritePort()
     {
-        var value = IsEmpty && !HasDetails ? CurrentSearch.LocalPort?.ToString() : SelectedRow?.Connection != null ? SelectedRow.Port.ToString() : CurrentSearch.LocalPort?.ToString();
+        var value = IsEmpty && !HasDetails ? activeSearch.LocalPort?.ToString() : SelectedRow?.Connection != null ? SelectedRow.Port.ToString() : activeSearch.LocalPort?.ToString();
         if (!int.TryParse(value, out var port) || port is < 1 or > 65535) { Status = "请选择端口或输入 1–65535 的端口号"; return; }
         AddFavorite("port", value, data.Notes.GetValueOrDefault(port) ?? $"Port {value}");
     }
@@ -81,7 +81,7 @@ public sealed partial class MainViewModel
     [RelayCommand] private void RemoveFavorite(Favorite? favorite)
     { if (favorite == null) return; Favorites.Remove(favorite); data.Favorites.Remove(favorite); data.SaveFavorites(); }
     [RelayCommand] private void QueryFavorite(Favorite? favorite)
-    { if (favorite == null) return; SelectedSearchField = favorite.Type switch { "port" => SearchField.LocalPort, "pid" => SearchField.Pid, _ => SearchField.ProcessName }; IsExactSearch = true; SearchText = favorite.Value; Filter = "All"; Page = favorite.Type == "port" ? "Ports" : "Search"; RefreshViews(); }
+    { if (favorite == null) return; SelectedSearchField = favorite.Type switch { "port" => SearchField.LocalPort, "pid" => SearchField.Pid, _ => SearchField.ProcessName }; IsExactSearch = true; SearchText = favorite.Value; Filter = "All"; Page = favorite.Type == "port" ? "Ports" : "Search"; ApplySearch(); }
     private void UpdateFavorites()
     {
         foreach (var f in Favorites)
