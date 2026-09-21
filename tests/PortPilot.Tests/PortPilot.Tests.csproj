@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
  <PropertyGroup><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
  <ItemGroup>
+  <Compile Include="../../src/PortPilot/ViewModels/InspectorRow.cs" Link="App/InspectorRow.cs"/>
   <ProjectReference Include="../../src/PortPilot.Core/PortPilot.Core.csproj"/>
   <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1"/>
   <PackageReference Include="xunit" Version="2.9.2"/>

@@ -56,7 +56,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public AppSettings Settings => data.Settings;
     public string DataDirectory => store.DataDirectory;
     public string Privilege => Core.Native.ProcessNativeApi.IsAdministrator() ? "Administrator" : "Standard";
-    public string About => $"PortPilot 1.0.3\nA lightweight Windows port & process inspector.\n\n{Environment.OSVersion}\n.NET {Environment.Version} · {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture}\n{Privilege}\n\nData: {DataDirectory}";
+    public string About => $"PortPilot 1.0.4\nA lightweight Windows port & process inspector.\n\n{Environment.OSVersion}\n.NET {Environment.Version} · {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture}\n{Privilege}\n\nData: {DataDirectory}";
     [ObservableProperty] private string page = "Dashboard";
     [ObservableProperty] private string searchText = "";
     [ObservableProperty] private SearchField selectedSearchField = SearchField.All;
@@ -121,9 +121,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ProcessesView = new ListCollectionView(Processes) { Filter = o => Matches((InspectorRow)o, false) && (!OnlyNetworkProcesses || ((InspectorRow)o).ConnectionCount > 0) };
         foreach (var view in new[] { PortsView, ConnectionsView, ProcessesView }.Cast<ListCollectionView>())
         {
-            view.IsLiveFiltering = true; view.IsLiveSorting = true;
-            foreach (var property in new[] { "State", "Name", "Path", "Pid", "Port", "Protocol", "LocalAddress", "Process", "ConnectionCount" }) view.LiveFilteringProperties.Add(property);
+            view.IsLiveSorting = true;
         }
+        ConfigureLiveFiltering();
         foreach (var f in data.Favorites) Favorites.Add(f);
         UpdateHistory();
         timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(Settings.RefreshInterval) };
@@ -148,13 +148,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     partial void OnSelectedFavoriteChanged(Favorite? value) { FavoriteName = value?.Name ?? ""; FavoriteNote = value?.Note ?? ""; }
     private bool Matches(InspectorRow r, bool connections)
     {
-        if (!Settings.ShowSystemProcesses && r.Process.IsSystem) return false;
+        if (!Settings.ShowSystemProcesses && r.IsSystem) return false;
         if (!SearchService.Match(activeSearch, r.Connection, r.Process)) return false;
         if (connections && r.Connection == null) return false;
         return Filter switch
         {
             "TCP" => r.Protocol.StartsWith("TCP"), "UDP" => r.Protocol.StartsWith("UDP"), "Listening" => r.Connection?.Listening == true,
-            "Established" => r.State == "ESTABLISHED", "Localhost" => r.LocalAddress is "127.0.0.1" or "::1", "System" => r.Process.IsSystem, "User Process" => !r.Process.IsSystem, _ => true
+            "Established" => r.State == "ESTABLISHED", "Localhost" => r.LocalAddress is "127.0.0.1" or "::1", "System" => r.IsSystem, "User Process" => !r.IsSystem, _ => true
         };
     }
     private void ApplySearch()
@@ -166,6 +166,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private void RefreshViews()
     {
         // Refresh/filter changes keep using the submitted query while the user edits the next one.
+        ConfigureLiveFiltering();
         PortsView.Refresh(); ConnectionsView.Refresh(); ProcessesView.Refresh(); UpdateVisibleCount();
         OnPropertyChanged(nameof(SearchFavorites));
         if (TreeMode && Page == "Processes") UpdateTree();
@@ -177,7 +178,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand] private void SearchPort(string port) { SelectedSearchField = SearchField.LocalPort; Filter = "All"; SearchText = port; Page = "Ports"; Record("SearchPort", port); ApplySearch(); }
     [RelayCommand] private void SubmitSearch() { HasDetails = false; Page = "Search"; ApplySearch(); Record("Search", $"{SearchOptions.First(o => o.Field == SelectedSearchField).Label} · {(IsExactSearch ? "精确" : "包含")} · {SearchText}"); }
     [RelayCommand] private void SetFilter(string value) => Filter = value;
-    [RelayCommand] private void CloseDetails() { HasDetails = false; detailToken?.Cancel(); }
+    [RelayCommand] private void CloseDetails() => HasDetails = false;
     [RelayCommand] private void OpenPalette() { IsPaletteOpen = true; PaletteQuery = ""; }
     [RelayCommand] private void ClosePalette() => IsPaletteOpen = false;
 
@@ -188,25 +189,31 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IsBusy = true; OnPropertyChanged(nameof(IsEmpty));
         try
         {
-            var next = await Task.Run(() => network.Scan(lifetime.Token), lifetime.Token);
+            var prepared = await Task.Run(() =>
+            {
+                var scan = network.Scan(lifetime.Token);
+                var summaries = scan.Connections.GroupBy(c => c.Pid).ToDictionary(g => g.Key, g => (Count: g.Count(), Listening: Listening(g)));
+                return (Snapshot: scan, ByPid: scan.Processes.ToDictionary(p => p.Pid), Summaries: summaries);
+            }, lifetime.Token);
+            var next = prepared.Snapshot;
             snapshot = next;
-            var byPid = next.Processes.ToDictionary(p => p.Pid);
-            var groups = next.Connections.GroupBy(c => c.Pid).ToDictionary(g => g.Key, g => g.ToArray());
+            var byPid = prepared.ByPid;
             var seenPorts = new HashSet<string>(); var seenProcesses = new HashSet<string>();
             foreach (var c in next.Connections.DistinctBy(c => c.Key))
             {
                 var p = byPid.GetValueOrDefault(c.Pid) ?? new ProcessSnapshot(c.Pid, 0, "Process exited", "Unavailable", 0, "—", 0, 0, 0, 0, "Process exited");
                 var key = c.Key + "|" + p.StartTicks; seenPorts.Add(key);
                 if (!portIndex.TryGetValue(key, out var row)) { row = new(key, p, c, next.Time); portIndex[key] = row; Ports.Add(row); }
-                row.Update(p, c, data.Notes.GetValueOrDefault(c.LocalPort) ?? PortCatalog.Hint(c.LocalPort), groups[c.Pid].Length, Listening(groups[c.Pid]));
+                var summary = prepared.Summaries[c.Pid];
+                row.Update(p, c, data.Notes.GetValueOrDefault(c.LocalPort) ?? PortCatalog.Hint(c.LocalPort), summary.Count, summary.Listening);
             }
             RemoveMissing(Ports, portIndex, seenPorts);
             foreach (var p in next.Processes)
             {
                 var key = $"{p.Pid}:{p.StartTicks}"; seenProcesses.Add(key);
                 if (!processIndex.TryGetValue(key, out var row)) { row = new(key, p, null, next.Time); processIndex[key] = row; Processes.Add(row); }
-                var connections = groups.GetValueOrDefault(p.Pid) ?? [];
-                row.Update(p, null, "", connections.Length, Listening(connections));
+                var summary = prepared.Summaries.GetValueOrDefault(p.Pid);
+                row.Update(p, null, "", summary.Count, summary.Listening ?? "");
             }
             RemoveMissing(Processes, processIndex, seenProcesses);
             ListeningCount = next.Connections.Where(c => c.Listening).DistinctBy(c => (c.Protocol, c.LocalAddress, c.LocalPort)).Count();

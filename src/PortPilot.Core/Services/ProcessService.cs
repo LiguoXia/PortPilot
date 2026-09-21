@@ -10,8 +10,7 @@ public sealed class ProcessService(ILogger<ProcessService> logger)
 {
     private readonly Dictionary<ProcessIdentity, (string Path, string User)> metadata = [];
     private readonly Dictionary<ProcessIdentity, (TimeSpan Cpu, long Time)> cpuSamples = [];
-    private readonly Dictionary<ProcessIdentity, ProcessDetails> details = [];
-    private readonly object detailGate = new();
+    private readonly ProcessDetailsCache details = new();
     public IReadOnlyList<ProcessSnapshot> Scan(CancellationToken cancellationToken)
     {
         var parents = ProcessNativeApi.Parents();
@@ -55,7 +54,7 @@ public sealed class ProcessService(ILogger<ProcessService> logger)
         }
         foreach (var key in metadata.Keys.Where(k => !live.Contains(k)).ToArray()) metadata.Remove(key);
         foreach (var key in cpuSamples.Keys.Where(k => !live.Contains(k)).ToArray()) cpuSamples.Remove(key);
-        lock (detailGate) foreach (var key in details.Keys.Where(k => !live.Contains(k)).ToArray()) details.Remove(key);
+        details.RemoveExpiredOrExited(live);
         return result;
     }
     public ProcessDetails Details(ProcessSnapshot process, CancellationToken token)
@@ -65,7 +64,7 @@ public sealed class ProcessService(ILogger<ProcessService> logger)
         if (handle.IsInvalid) throw new Win32Exception(System.Runtime.InteropServices.Marshal.GetLastWin32Error());
         ProcessNativeApi.EnsureRunning(handle);
         if (process.StartTicks <= 0 || ProcessNativeApi.StartTicks(handle) != process.StartTicks) throw new InvalidOperationException("Process no longer exists / PID 已复用，请刷新。");
-        lock (detailGate) if (details.TryGetValue(process.Identity, out var cached)) return cached with { Process = process };
+        if (details.TryGet(process.Identity, out var cached)) return cached with { Process = process };
         string Try(string field, Func<string> read)
         {
             try { token.ThrowIfCancellationRequested(); return read(); }
@@ -85,8 +84,9 @@ public sealed class ProcessService(ILogger<ProcessService> logger)
         ProcessNativeApi.EnsureRunning(handle);
         if (ProcessNativeApi.StartTicks(handle) != process.StartTicks) throw new InvalidOperationException("Process exited");
         var result = new ProcessDetails(process, command, directory, architecture, elevated, signature, company, description, version, product, modules, environment);
-        lock (detailGate) details[process.Identity] = result;
+        token.ThrowIfCancellationRequested();
+        details.Store(result);
         return result;
     }
-    public void ClearDetailsCache() { lock (detailGate) details.Clear(); }
+    public void ClearDetailsCache() => details.Clear();
 }

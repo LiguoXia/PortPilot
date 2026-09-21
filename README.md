@@ -4,6 +4,13 @@ A lightweight Windows port & process inspector.
 
 面向 Windows 开发者的本机端口、PID、进程诊断工具。使用 **.NET 8 / WPF / MVVM**，通过 Windows IP Helper 与进程 API 读取实时信息，不解析 netstat 命令输出。
 
+## 1.0.4 内存与刷新优化
+
+- 按搜索/筛选条件启用所需字段监听，CPU、内存采样只更新变化的显示字段；PID 端口汇总在后台每轮计算一次。
+- Network 列表只创建可见区域附近的控件，滚动时复用；关闭详情会释放展示数据并取消请求。
+- 详情缓存最多保留 32 项，估算保留预算 4 MiB，5 分钟过期；进程退出、超出容量或手动清缓存时释放。
+- 同机约 2400–2900 个端点的对比中，工作集峰值约 **489 → 292 MiB**，Dashboard 每轮分配约 **17.9 → 2.9 MiB**。数据规模、访问过的页面和系统运行时会影响内存，完整口径见 [内存验证记录](docs/MEMORY-1.0.4.md)。
+
 ## 1.0.3 图标修复
 
 - 修复部分 Windows 11 环境中图标显示为方框的问题：界面图标改为随 EXE 内置的矢量绘制，不再依赖 Segoe Fluent Icons / MDL2 图标字体。
@@ -125,6 +132,8 @@ PortPilot/
 ```
 
 主程序由依赖注入组装服务，ViewModel 不直接执行复杂 P/Invoke。核心依赖仅 CommunityToolkit.Mvvm 和 Microsoft.Extensions 系列。运行期不需要数据库、网络 API 或第三方服务。
+
+可复现内存与响应测试：`./measure.ps1`。脚本将 EXE 复制到新的独立测试目录，额外创建 400 个回环监听端点，依次运行 Dashboard、Ports、Network、反复查看详情、关闭详情并移除测试端点五个阶段，各 40 秒。`./measure.ps1 -PhaseSeconds 120` 运行约 10 分钟。报告记录工作集、私有提交内存、托管内存、分配量、刷新耗时和 UI 调度延迟，不触碰原有 data。不要同时运行多组测试，其他程序的负载会影响结果。
 
 ## 数据与权限
 

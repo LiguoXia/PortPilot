@@ -8,17 +8,33 @@ namespace PortPilot.ViewModels;
 
 public sealed partial class MainViewModel
 {
+    private Task detailTask = Task.CompletedTask;
     partial void OnSelectedRowChanged(InspectorRow? value)
     {
         OnPropertyChanged(nameof(CanNote));
         KillCommand.NotifyCanExecuteChanged();
-        if (value != null) _ = ShowDetailsAsync(value);
+        if (value != null) detailTask = ShowDetailsAsync(value);
     }
-    [RelayCommand] private async Task InspectAsync(InspectorRow? row) { if (row != null) { SelectedRow = row; await ShowDetailsAsync(row); } }
+    [RelayCommand] private async Task InspectAsync(InspectorRow? row)
+    {
+        if (row == null) return;
+        if (ReferenceEquals(SelectedRow, row)) detailTask = ShowDetailsAsync(row);
+        else SelectedRow = row;
+        await detailTask;
+    }
+    partial void OnHasDetailsChanged(bool value)
+    {
+        if (value) return;
+        detailToken?.Cancel(); IsDetailBusy = false;
+        DetailConnections.Clear(); DetailFields.Clear();
+        DetailCommandLine = DetailModules = DetailEnvironment = DetailFamily = "";
+    }
     private async Task ShowDetailsAsync(InspectorRow row)
     {
-        detailToken?.Cancel(); detailToken = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
-        var token = detailToken.Token;
+        detailToken?.Cancel();
+        using var request = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        detailToken = request;
+        var token = request.Token;
         HasDetails = true; IsDetailBusy = true; DetailTitle = row.Name; DetailSubtitle = $"PID {row.Pid} · 正在读取…";
         PortNote = data.Notes.GetValueOrDefault(row.Port) ?? "";
         DetailCommandLine = "正在读取启动参数…"; DetailModules = "正在读取…"; DetailEnvironment = "正在读取…"; DetailFields.Clear();
@@ -45,7 +61,7 @@ public sealed partial class MainViewModel
         }
         catch (OperationCanceledException) { /* Selection changed: the next request owns the panel. */ }
         catch (Exception ex) { if (!token.IsCancellationRequested) { DetailSubtitle = ex is System.ComponentModel.Win32Exception w && w.NativeErrorCode == 5 ? "Access Denied · 可使用管理员权限读取" : ex.Message; DetailCommandLine = "Unavailable / Access Denied"; DetailModules = "Unavailable"; DetailEnvironment = "Unavailable"; logger.LogWarning(ex, "Details failed PID {Pid}", row.Pid); } }
-        finally { if (!token.IsCancellationRequested) IsDetailBusy = false; }
+        finally { if (ReferenceEquals(detailToken, request)) { detailToken = null; IsDetailBusy = false; } }
     }
     private void UpdateDetailConnections(int pid)
     {

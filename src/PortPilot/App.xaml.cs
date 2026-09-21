@@ -28,7 +28,7 @@ public partial class App : Application
         DispatcherUnhandledException += (_, args) =>
         {
             logger?.LogError(args.Exception, "Unhandled UI error");
-            if (e.Args.Contains("--smoke-test"))
+            if (e.Args.Contains("--smoke-test") || e.Args.Contains("--perf-test"))
             {
                 File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "smoke-error.txt"), args.Exception.ToString());
                 args.Handled = true; Shutdown(1); return;
@@ -50,12 +50,13 @@ public partial class App : Application
             if (e.Args.FirstOrDefault() == "--elevated-operation") { ShutdownMode = ShutdownMode.OnExplicitShutdown; await RunElevatedAsync(e.Args); Shutdown(); return; }
             var window = services.GetRequiredService<MainWindow>(); MainWindow = window; window.Show();
             await window.ViewModel.InitializeAsync();
+            if (e.Args.Contains("--perf-test")) { await Infrastructure.PerformanceRun.RunAsync(window, Path.Combine(store.DataDirectory, "cache")); Shutdown(); return; }
             if (e.Args.Contains("--smoke-test")) await SmokeTestAsync(window, store);
         }
         catch (Exception ex)
         {
             logger?.LogCritical(ex, "Startup failed");
-            if (e.Args.Contains("--smoke-test")) { File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "smoke-error.txt"), ex.ToString()); Shutdown(1); return; }
+            if (e.Args.Contains("--smoke-test") || e.Args.Contains("--perf-test")) { File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "smoke-error.txt"), ex.ToString()); Shutdown(1); return; }
             MessageBox.Show("PortPilot 无法启动。请确保 EXE 所在目录可写。\n\n" + ex.Message, "PortPilot", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
         }
@@ -127,6 +128,7 @@ public partial class App : Application
         result.Add("DPI rendering: 125%, 150%, 175%, 200% (offscreen render, not physical monitor transitions)");
         window.Width = 900; window.Height = 600; await Capture("minimum-size-dark"); window.Width = 1200; window.Height = 760;
         await Infrastructure.SearchUiSmoke.VerifyAsync(window, themes, folder, fixturePort, result);
+        await Infrastructure.LiveFilteringSmoke.VerifyAsync(window, result);
         vm.SelectedSearchField = SearchField.ProcessName; vm.IsExactSearch = true; vm.SearchText = "PortPilot.exe";
         vm.SubmitSearchCommand.Execute(null); await Task.Delay(100); await Capture("search-exact-process");
         vm.SearchText = ""; vm.SelectedSearchField = SearchField.All; vm.IsExactSearch = false;
