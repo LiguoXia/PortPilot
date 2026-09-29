@@ -52,4 +52,6 @@ bash build-macos.sh osx-arm64
 
 GitHub Actions 使用 `macos-15-intel` 和 `macos-15` 分别构建并原生测试 x64 / ARM64：真实 TCP/UDP IPv4/IPv6、已建立连接、进程详情、PID 复用拒绝、测试子进程 SIGTERM/SIGKILL、包内 UI 启动、所有页面与主题，以及解压后的签名与启动检查。并行执行 Windows 回归测试。所有任务成功后，`v<版本号>` 标签触发 GitHub Release，附带两架构 DMG/ZIP、Windows EXE/ZIP 和 SHA256。
 
+本次结果与验证边界见 [1.1.0 macOS 验证记录](VALIDATION-MACOS-1.1.0.md)。
+
 参考：[Avalonia macOS 部署](https://docs.avaloniaui.net/docs/deployment/macos)、[GitHub runner 架构](https://github.com/actions/runner-images)、[Apple 首次打开应用说明](https://support.apple.com/102445)、[lsof 字段协议](https://github.com/lsof-org/lsof/blob/master/Lsof.8)。
