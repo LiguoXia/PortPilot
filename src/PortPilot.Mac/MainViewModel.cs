@@ -108,6 +108,16 @@ public sealed partial class MainViewModel : ObservableObject
     {
         Data.Settings.AutoRefresh = AutoRefresh; Data.Settings.RefreshInterval = Interval * 1000; Data.Settings.Theme = Theme; Data.SaveSettings();
     }
+    public void LoadPreview()
+    {
+        // Explicit UI preview mode uses synthetic data and an isolated temporary store.
+        var process = new ProcessSnapshot(8123, DateTime.UtcNow.AddHours(-1).Ticks, "node", "/usr/local/bin/node", 8000, "developer", 1.2, 64 * 1048576, 0, 0, "Available");
+        Snapshot = new([new("TCP", "127.0.0.1", 8080, "", 0, "LISTENING", process.Pid), new("TCP6", "::1", 5432, "", 0, "LISTENING", process.Pid), new("TCP", "127.0.0.1", 51000, "192.0.2.1", 443, "ESTABLISHED", process.Pid)], [process], DateTimeOffset.Now, []);
+        Data.Favorites.Add(new() { Type = "port", Value = "8080", Name = "开发服务", Note = "Local API" });
+        Data.History.Add(new(DateTimeOffset.Now, "查看", "node · PID 8123"));
+        Summary = "2 监听    ·    3 TCP    ·    0 UDP    ·    1 进程"; Status = "界面预览 · 合成数据";
+        Filter(); UpdateUserData();
+    }
     private static void Replace<T>(ObservableCollection<T> list, IEnumerable<T> values)
     { var next = values.ToArray(); list.Clear(); foreach (var value in next) list.Add(value); }
 }

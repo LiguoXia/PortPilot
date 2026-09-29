@@ -51,8 +51,18 @@ jobs:
           mkdir "$RUNNER_TEMP/unpacked"
           ditto -x -k artifacts/macos/${{ matrix.rid }}/PortPilot-${{ matrix.rid }}.zip "$RUNNER_TEMP/unpacked"
           codesign --verify --deep --strict "$RUNNER_TEMP/unpacked/PortPilot.app"
-          lipo -verify_arch '${{ matrix.arch }}' "$RUNNER_TEMP/unpacked/PortPilot.app/Contents/MacOS/PortPilot.Mac"
+          lipo "$RUNNER_TEMP/unpacked/PortPilot.app/Contents/MacOS/PortPilot.Mac" -verify_arch '${{ matrix.arch }}'
           "$RUNNER_TEMP/unpacked/PortPilot.app/Contents/MacOS/PortPilot.Mac" --smoke-test
+      - name: Verify DMG and Launch Services startup
+        run: |
+          mount="$RUNNER_TEMP/PortPilot-volume"
+          mkdir "$mount"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" artifacts/macos/${{ matrix.rid }}/PortPilot-${{ matrix.rid }}.dmg
+          trap 'hdiutil detach "$mount"' EXIT
+          codesign --verify --deep --strict "$mount/PortPilot.app"
+          test -L "$mount/Applications"
+          open -W -n "$mount/PortPilot.app" --args --smoke-test --smoke-result "$RUNNER_TEMP/launch-result.txt"
+          grep -qx PASS "$RUNNER_TEMP/launch-result.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: PortPilot-${{ matrix.rid }}

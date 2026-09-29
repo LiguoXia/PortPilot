@@ -29,13 +29,15 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         var smoke = args.Contains("--smoke-test");
-        vm = new MainViewModel(smoke ? Path.Combine(Path.GetTempPath(), "PortPilot-smoke-" + Guid.NewGuid().ToString("N")) : null);
+        var preview = Array.IndexOf(args, "--ui-preview");
+        vm = new MainViewModel(smoke || preview >= 0 ? Path.Combine(Path.GetTempPath(), "PortPilot-smoke-" + Guid.NewGuid().ToString("N")) : null);
         DataContext = vm; ApplyTheme();
         timer.Interval = TimeSpan.FromSeconds(vm.Interval);
         timer.Tick += async (_, _) => { if (vm.AutoRefresh && !actionBusy) await Guard(Refresh); };
         Opened += async (_, _) =>
         {
-            if (smoke) await SmokeAsync(args); else { await Guard(Refresh); timer.Start(); }
+            if (preview >= 0 && preview + 1 < args.Length) await PreviewAsync(args[preview + 1]);
+            else if (smoke) await SmokeAsync(args); else { await Guard(Refresh); timer.Start(); }
         };
         Closed += (_, _) => { timer.Stop(); lifetime.Cancel(); inspectorRequest++; };
         KeyDown += async (_, e) =>
@@ -196,6 +198,28 @@ public partial class MainWindow : Window
                 using var bitmap = new RenderTargetBitmap(new PixelSize((int)Bounds.Width, (int)Bounds.Height)); bitmap.Render(this); bitmap.Save(args[index + 1]);
             }
             Console.WriteLine("PortPilot macOS UI smoke passed (all tabs, themes, PID search, native details).");
+            var resultIndex = Array.IndexOf(args, "--smoke-result");
+            if (resultIndex >= 0 && resultIndex + 1 < args.Length) await File.WriteAllTextAsync(args[resultIndex + 1], "PASS\n");
+        }
+        catch (Exception ex) { Console.Error.WriteLine(ex); code = 1; }
+        finally { (Application.Current!.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)!.Shutdown(code); }
+    }
+    private async Task PreviewAsync(string folder)
+    {
+        int code = 0;
+        try
+        {
+            Directory.CreateDirectory(folder); vm.AutoRefresh = false; vm.LoadPreview();
+            foreach (var theme in new[] { "light", "dark" })
+            {
+                vm.Theme = theme; ApplyTheme();
+                for (int page = 0; page < Pages.ItemCount; page++)
+                {
+                    Pages.SelectedIndex = page; await Task.Delay(180);
+                    using var bitmap = new RenderTargetBitmap(new PixelSize((int)Bounds.Width, (int)Bounds.Height));
+                    bitmap.Render(this); bitmap.Save(Path.Combine(folder, $"mac-{theme}-{page}.png"));
+                }
+            }
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); code = 1; }
         finally { (Application.Current!.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)!.Shutdown(code); }
