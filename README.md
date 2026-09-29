@@ -1,8 +1,22 @@
 # PortPilot
 
-A lightweight Windows port & process inspector.
+A lightweight Windows & macOS port and process inspector.
 
-面向 Windows 开发者的本机端口、PID、进程诊断工具。使用 **.NET 8 / WPF / MVVM**，通过 Windows IP Helper 与进程 API 读取实时信息，不解析 netstat 命令输出。
+面向 Windows 与 macOS 开发者的本机端口、PID、进程诊断工具。Windows 使用 **.NET 8 / WPF / MVVM** 和 Windows IP Helper；macOS 使用 **Avalonia**、系统 lsof / libproc，复用现有搜索、数据模型、持久化和导出逻辑。
+
+## 1.1.0 · macOS Intel / Apple Silicon
+
+从 [GitHub Releases](https://github.com/LiguoXia/PortPilot/releases/latest) 下载：
+
+| 平台 | 安装包 |
+| --- | --- |
+| Apple Silicon（M 系列，ARM64） | `PortPilot-osx-arm64.dmg` / `.zip` |
+| Intel Mac（x64） | `PortPilot-osx-x64.dmg` / `.zip` |
+| Windows x64 | `PortPilot-win-x64.zip` / `PortPilot.exe` |
+
+Mac 要求 macOS 12+，内置运行时，无需 .NET 或 Rosetta。DMG 打开后拖入 Applications。当前 Mac 包是 ad-hoc 签名，尚无 Apple Developer ID 签名 / 公证，首次打开可能需要通过“系统设置 → 隐私与安全性 → 仍要打开”。数据保存于 `~/Library/Application Support/PortPilot/data/`。
+
+Mac 支持 TCP/UDP IPv4/IPv6、搜索、进程详情、收藏/备注、历史、导出、主题与进程结束确认。完整使用说明、构建命令、权限和功能差异见 **[macOS 文档](docs/MACOS.md)**。下方历史版本、界面截图、快捷键和便携目录说明主要适用于 Windows 版。
 
 ## 1.0.4 内存与刷新优化
 

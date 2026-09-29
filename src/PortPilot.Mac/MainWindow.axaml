@@ -1,0 +1,70 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="PortPilot.Mac.MainWindow"
+        Title="PortPilot" Width="1280" Height="820" MinWidth="920" MinHeight="620" Icon="/Assets/PortPilot.ico">
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="24">
+    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,20">
+      <StackPanel><TextBlock Text="PortPilot" FontSize="27" FontWeight="Bold" /><TextBlock Text="本机端口与进程 · macOS" Opacity="0.6" Margin="0,5,0,0" /></StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+        <CheckBox Content="自动刷新" IsChecked="{Binding AutoRefresh}" /><Button Content="刷新 ⌘R" Click="RefreshClick" />
+      </StackPanel>
+    </Grid>
+    <Grid Grid.Row="1" ColumnDefinitions="150,*,Auto,Auto" Margin="0,0,0,18">
+      <ComboBox ItemsSource="{Binding SearchFields}" SelectedIndex="{Binding FieldIndex}" HorizontalAlignment="Stretch" />
+      <TextBox Grid.Column="1" Name="SearchBox" Text="{Binding SearchText}" Watermark="端口、PID、进程名称、路径或 IP… 按 Enter 搜索" Margin="8,0" KeyDown="SearchKeyDown" />
+      <CheckBox Grid.Column="2" Content="精确" IsChecked="{Binding Exact}" Margin="8,0,16,0" /><Button Grid.Column="3" Content="搜索" Click="SearchClick" />
+    </Grid>
+    <TabControl Grid.Row="2" Name="Pages">
+      <TabItem Header="概览">
+        <ScrollViewer><StackPanel Spacing="22" Margin="4,24">
+          <TextBlock Text="连接，一目了然。" FontSize="30" FontWeight="SemiBold" />
+          <Border Background="#163B82F6" CornerRadius="12" Padding="24"><TextBlock Text="{Binding Summary}" FontSize="22" TextWrapping="Wrap" /></Border>
+          <TextBlock Text="快速查找" FontSize="18" FontWeight="SemiBold" />
+          <WrapPanel><Button Content="HTTP · 80" Tag="80" Click="QuickPortClick" Margin="0,0,8,8" /><Button Content="HTTPS · 443" Tag="443" Click="QuickPortClick" Margin="0,0,8,8" /><Button Content="Dev · 8080" Tag="8080" Click="QuickPortClick" Margin="0,0,8,8" /><Button Content="MySQL · 3306" Tag="3306" Click="QuickPortClick" Margin="0,0,8,8" /><Button Content="Redis · 6379" Tag="6379" Click="QuickPortClick" Margin="0,0,8,8" /><Button Content="Postgres · 5432" Tag="5432" Click="QuickPortClick" Margin="0,0,8,8" /></WrapPanel>
+          <TextBlock Text="端口 → PID → 全部连接" FontSize="18" FontWeight="SemiBold" />
+          <TextBlock Text="在端口或进程列表选择条目，查看详情、收藏、导出或请求结束。搜索仅在 Enter 或点击搜索后执行，刷新会保留已提交条件。" TextWrapping="Wrap" />
+          <TextBlock Text="macOS 仅返回当前权限可见的信息。受保护进程、root 进程及 PortPilot 自身禁止结束。释放端口会影响占用进程的所有连接。" TextWrapping="Wrap" Opacity="0.65" />
+        </StackPanel></ScrollViewer>
+      </TabItem>
+      <TabItem Header="端口">
+        <Grid RowDefinitions="Auto,*,Auto" Margin="0,12,0,0">
+          <StackPanel Orientation="Horizontal" Spacing="14" Margin="0,0,0,10"><ComboBox ItemsSource="{Binding Protocols}" SelectedIndex="{Binding ProtocolIndex}" /><CheckBox Content="仅监听" IsChecked="{Binding ListeningOnly}" /><TextBlock Text="支持多选 · 双击查看详情" VerticalAlignment="Center" Opacity="0.6" /></StackPanel>
+          <DataGrid Grid.Row="1" Name="PortsGrid" ItemsSource="{Binding Ports}" IsReadOnly="True" AutoGenerateColumns="False" SelectionMode="Extended" DoubleTapped="DetailsClick" SelectionChanged="PortSelectionChanged">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="协议" Binding="{Binding Protocol}" Width="75" /><DataGridTextColumn Header="本地端点" Binding="{Binding Local}" Width="180" />
+              <DataGridTextColumn Header="远程端点" Binding="{Binding Remote}" Width="180" /><DataGridTextColumn Header="状态" Binding="{Binding State}" Width="115" />
+              <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="80" /><DataGridTextColumn Header="进程" Binding="{Binding Name}" Width="170" />
+              <DataGridTextColumn Header="CPU %" Binding="{Binding Cpu}" Width="80" /><DataGridTextColumn Header="MiB" Binding="{Binding Memory}" Width="80" /><DataGridTextColumn Header="用户" Binding="{Binding User}" Width="120" /><DataGridTextColumn Header="程序路径" Binding="{Binding Path}" Width="300" />
+            </DataGrid.Columns>
+          </DataGrid>
+          <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Margin="0,12,0,0"><Button Content="查看详情" Click="DetailsClick" /><Button Content="PID 全部端口" Click="PidPortsClick" /><Button Content="收藏端口" Click="FavoritePortClick" /><Button Content="导出" Click="ExportClick" /><Button Content="结束 / 释放端口" Click="TerminateClick" /><Button Content="Force Kill" Click="ForceClick" /></StackPanel>
+        </Grid>
+      </TabItem>
+      <TabItem Header="进程">
+        <Grid RowDefinitions="*,Auto" Margin="0,12,0,0">
+          <DataGrid Name="ProcessesGrid" ItemsSource="{Binding Processes}" IsReadOnly="True" AutoGenerateColumns="False" SelectionMode="Extended" DoubleTapped="DetailsClick">
+            <DataGrid.Columns><DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="80" /><DataGridTextColumn Header="进程" Binding="{Binding Name}" Width="200" /><DataGridTextColumn Header="父 PID" Binding="{Binding ParentPid}" Width="80" /><DataGridTextColumn Header="CPU %" Binding="{Binding Cpu}" Width="80" /><DataGridTextColumn Header="内存 (bytes)" Binding="{Binding Memory}" Width="130" /><DataGridTextColumn Header="用户" Binding="{Binding User}" Width="120" /><DataGridTextColumn Header="启动时间" Binding="{Binding Started}" Width="170" /><DataGridTextColumn Header="程序路径" Binding="{Binding Path}" Width="300" /><DataGridTextColumn Header="读取状态" Binding="{Binding Status}" Width="150" /></DataGrid.Columns>
+          </DataGrid>
+          <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,12,0,0"><Button Content="查看详情" Click="DetailsClick" /><Button Content="PID 全部端口" Click="PidPortsClick" /><Button Content="收藏进程" Click="FavoriteProcessClick" /><Button Content="导出" Click="ExportClick" /><Button Content="正常结束" Click="TerminateClick" /><Button Content="Force Kill" Click="ForceClick" /><Button Content="结束进程树" Click="TreeClick" /></StackPanel>
+        </Grid>
+      </TabItem>
+      <TabItem Header="收藏">
+        <Grid RowDefinitions="*,Auto,Auto" Margin="0,12,0,0">
+          <DataGrid Name="FavoritesGrid" ItemsSource="{Binding Favorites}" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="FavoriteSelectionChanged" DoubleTapped="OpenFavoriteClick">
+            <DataGrid.Columns><DataGridTextColumn Header="类型" Binding="{Binding Type}" Width="90" /><DataGridTextColumn Header="值" Binding="{Binding Value}" Width="170" /><DataGridTextColumn Header="名称" Binding="{Binding Name}" Width="160" /><DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="100" /><DataGridTextColumn Header="PID" Binding="{Binding Owner}" Width="150" /><DataGridTextColumn Header="备注" Binding="{Binding Note}" Width="*" /></DataGrid.Columns>
+          </DataGrid>
+          <Grid Grid.Row="1" ColumnDefinitions="200,*" Margin="0,12"><TextBox Text="{Binding FavoriteName}" Watermark="收藏名称" /><TextBox Grid.Column="1" Text="{Binding FavoriteNote}" Watermark="收藏备注" Margin="8,0,0,0" /></Grid>
+          <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8"><Button Content="查询" Click="OpenFavoriteClick" /><Button Content="保存名称 / 备注" Click="SaveFavoriteClick" /><Button Content="移除收藏" Click="RemoveFavoriteClick" /><Button Content="收藏搜索中的端口" Click="FavoriteQueryClick" /></StackPanel>
+        </Grid>
+      </TabItem>
+      <TabItem Header="历史">
+        <DataGrid ItemsSource="{Binding History}" Margin="0,12,0,0" IsReadOnly="True" AutoGenerateColumns="False"><DataGrid.Columns><DataGridTextColumn Header="时间" Binding="{Binding Time}" Width="220" /><DataGridTextColumn Header="操作" Binding="{Binding Action}" Width="140" /><DataGridTextColumn Header="详情" Binding="{Binding Detail}" Width="*" /></DataGrid.Columns></DataGrid>
+      </TabItem>
+      <TabItem Header="设置">
+        <StackPanel Spacing="18" Margin="4,24"><TextBlock Text="偏好设置" FontSize="24" /><TextBlock Text="刷新间隔（秒）" /><ComboBox ItemsSource="{Binding Intervals}" SelectedItem="{Binding Interval}" /><TextBlock Text="主题" /><ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding Theme}" /><Button Content="保存设置" Click="SaveSettingsClick" /><TextBlock Text="数据目录" FontWeight="SemiBold" /><TextBlock Text="{Binding DataLocation}" TextWrapping="Wrap" /><Button Content="在 Finder 中打开" Click="OpenDataClick" /><TextBlock Text="⌘F 搜索 · ⌘R 刷新 · Esc 关闭详情。正常结束发送 SIGTERM，强制结束发送 SIGKILL。进程树操作只针对确认框中列出的快照，不追踪之后产生的子进程。" TextWrapping="Wrap" /><TextBlock Text="macOS 版不提供 Windows UAC、注册表、DLL 或 WinVerifyTrust 信息。签名与目标进程架构未校验，环境变量不读取。" TextWrapping="Wrap" Opacity="0.65" /></StackPanel>
+      </TabItem>
+    </TabControl>
+    <TextBlock Grid.Row="3" Text="{Binding Status}" TextWrapping="Wrap" FontSize="12" Opacity="0.7" Margin="0,16,0,0" MaxHeight="55" />
+    <Border Grid.Row="1" Grid.RowSpan="2" Name="Inspector" IsVisible="False" HorizontalAlignment="Right" Width="510" Padding="20" CornerRadius="12" Background="{DynamicResource SystemControlBackgroundAltHighBrush}" BorderBrush="#808080" BorderThickness="1" BoxShadow="0 8 30 0 #40000000">
+      <Grid RowDefinitions="Auto,*,Auto,Auto"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="Inspector" FontSize="23" FontWeight="SemiBold" /><Button Grid.Column="1" Content="关闭" Click="CloseInspectorClick" /></Grid><TextBox Grid.Row="1" Text="{Binding Details}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" Margin="0,14" ScrollViewer.VerticalScrollBarVisibility="Auto" /><TextBox Grid.Row="2" Text="{Binding Note}" Watermark="当前端口备注" /><StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8" Margin="0,12,0,0"><Button Content="保存端口备注" Click="SaveNoteClick" /><Button Content="打开文件位置" Click="OpenFileClick" /><Button Content="复制" Click="CopyDetailsClick" /></StackPanel></Grid>
+    </Border>
+  </Grid>
+</Window>

@@ -76,6 +76,7 @@ public static class ProcessNativeApi
     }
     public static (string User, string Elevated) Token(SafeProcessHandle handle)
     {
+        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
         if (!OpenProcessToken(handle, 8, out var token)) throw new Win32Exception(Marshal.GetLastWin32Error());
         using (token)
         {
@@ -86,6 +87,7 @@ public static class ProcessNativeApi
     }
     public static bool IsAdministrator()
     {
+        if (!OperatingSystem.IsWindows()) return false;
         using var identity = WindowsIdentity.GetCurrent();
         return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
     }

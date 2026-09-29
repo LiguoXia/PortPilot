@@ -1,0 +1,111 @@
+name: Build and release
+on:
+  push:
+    branches: [main, 'codex/**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    name: macOS (${{ matrix.rid }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            rid: osx-x64
+            arch: x86_64
+          - runner: macos-15
+            rid: osx-arm64
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Verify native runner architecture
+        run: test "$(uname -m)" = '${{ matrix.arch }}'
+      - name: Shared business and macOS integration tests
+        run: dotnet test tests/PortPilot.Mac.Tests/PortPilot.Mac.Tests.csproj -c Release --logger trx --results-directory TestResults
+      - name: Package app, DMG and ZIP
+        shell: bash
+        run: |
+          version=$(sed -n 's/.*<Version>\(.*\)<\/Version>.*/\1/p' src/PortPilot.Mac/PortPilot.Mac.csproj | tr -d '\r ')
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then test "$GITHUB_REF_NAME" = "v$version"; fi
+          bash build-macos.sh '${{ matrix.rid }}' "$version"
+      - name: Launch bundled application and exercise UI
+        run: |
+          artifacts/macos/${{ matrix.rid }}/PortPilot.app/Contents/MacOS/PortPilot.Mac --smoke-test --screenshot "$RUNNER_TEMP/portpilot-${{ matrix.rid }}.png"
+      - name: Verify packaged ZIP and executable architecture
+        run: |
+          mkdir "$RUNNER_TEMP/unpacked"
+          ditto -x -k artifacts/macos/${{ matrix.rid }}/PortPilot-${{ matrix.rid }}.zip "$RUNNER_TEMP/unpacked"
+          codesign --verify --deep --strict "$RUNNER_TEMP/unpacked/PortPilot.app"
+          lipo -verify_arch '${{ matrix.arch }}' "$RUNNER_TEMP/unpacked/PortPilot.app/Contents/MacOS/PortPilot.Mac"
+          "$RUNNER_TEMP/unpacked/PortPilot.app/Contents/MacOS/PortPilot.Mac" --smoke-test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PortPilot-${{ matrix.rid }}
+          path: |
+            artifacts/macos/${{ matrix.rid }}/*.zip
+            artifacts/macos/${{ matrix.rid }}/*.dmg
+            artifacts/macos/${{ matrix.rid }}/*.sha256
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tests-${{ matrix.rid }}
+          path: |
+            TestResults/*.trx
+            ${{ runner.temp }}/portpilot-${{ matrix.rid }}.png
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build and test existing Windows application
+        run: ./build.ps1
+      - name: Package Windows release
+        shell: pwsh
+        run: |
+          Compress-Archive -Path release/PortPilot.exe,release/README.md -DestinationPath release/PortPilot-win-x64.zip
+          (Get-FileHash release/PortPilot-win-x64.zip -Algorithm SHA256).Hash.ToLower() + '  PortPilot-win-x64.zip' | Set-Content release/PortPilot-win-x64.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PortPilot-win-x64
+          path: |
+            release/PortPilot.exe
+            release/PortPilot-win-x64.zip
+            release/PortPilot-win-x64.sha256
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: PortPilot-*
+          merge-multiple: true
+          path: dist
+      - name: Publish verified release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "PortPilot $GITHUB_REF_NAME · Windows & macOS" --notes-file docs/RELEASE-1.1.0.md
