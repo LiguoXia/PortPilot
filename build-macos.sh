@@ -12,7 +12,7 @@ app="$out/PortPilot.app"
 [[ ! -e "$out" ]] || { echo "Output already exists: $out. Choose a clean checkout/output before packaging." >&2; exit 2; }
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 dotnet publish src/PortPilot.Mac/PortPilot.Mac.csproj -c Release -r "$rid" --self-contained true \
-  -p:Version="$version" -p:PublishSingleFile=false -o "$app/Contents/MacOS"
+  -p:Version="$version" -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=false -o "$app/Contents/MacOS"
 cat > "$app/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

@@ -100,7 +100,9 @@ public sealed partial class MainViewModel : ObservableObject
             favorite.Status = owners.Length > 0 ? "Occupied" : "Unknown";
             favorite.Owner = owners.Length > 0 ? string.Join(", ", owners) : "当前快照未发现";
         }
-        Replace(Favorites, Data.Favorites); Replace(History, Data.History);
+        // Keep the same selection while refreshing status; do not erase a note being edited.
+        if (!Favorites.SequenceEqual(Data.Favorites)) Replace(Favorites, Data.Favorites);
+        if (!History.SequenceEqual(Data.History)) Replace(History, Data.History);
     }
     public void SaveSettings()
     {

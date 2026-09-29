@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private long inspectorRequest;
     private bool actionBusy;
 
+    public MainWindow() : this([]) { }
     public MainWindow(string[] args)
     {
         InitializeComponent();
@@ -48,7 +49,11 @@ public partial class MainWindow : Window
     {
         try { await action(); }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
-        catch (Exception ex) { vm.Status = "操作失败：" + ex.Message; }
+        catch (Exception ex)
+        {
+            vm.Status = "操作失败：" + ex.Message;
+            if (Inspector.IsVisible && vm.Details == "正在读取…") vm.Details = ex.Message;
+        }
     }
     private Task Run(Action action) { action(); return Task.CompletedTask; }
     private async Task Refresh()
@@ -59,7 +64,7 @@ public partial class MainWindow : Window
         await vm.RefreshAsync(lifetime.Token);
         foreach (var row in vm.Ports.Where(r => ports.Contains(r.Key))) PortsGrid.SelectedItems.Add(row);
         foreach (var row in vm.Processes.Where(p => processes.Contains(p.Identity))) ProcessesGrid.SelectedItems.Add(row);
-        if (favorite != null) FavoritesGrid.SelectedItem = favorite;
+        if (favorite != null && FavoritesGrid.SelectedItem != favorite) FavoritesGrid.SelectedItem = favorite;
     }
     private async void RefreshClick(object? sender, RoutedEventArgs e) => await Guard(Refresh);
     private void SearchClick(object? sender, RoutedEventArgs e) { vm.SubmitSearch(); Pages.SelectedIndex = 1; CloseInspector(); }
